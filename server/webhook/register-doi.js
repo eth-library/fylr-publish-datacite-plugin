@@ -67,9 +67,26 @@ async function main() {
         process.exit(0);
     }
 
-    const dataciteConfig = pluginConfig.datacite || {};
-    const mappingConfig = pluginConfig.datacite_mapping || {};
-    const fieldMappings = mappingConfig.field_mapping || [];
+    // Read repository profile identifier from webhook URL query param (?repository=myid)
+    const profileId = info && info.request && info.request.query && info.request.query.repository && info.request.query.repository[0];
+    if (!profileId) {
+        console.error('Missing ?repository= query parameter in webhook URL');
+        console.log(JSON.stringify({ "error": { "code": "datacite.config.missing_profile_id", "description": "Webhook URL must include ?repository=<profile-id>" } }));
+        process.exit(0);
+    }
+
+    // Find the matching profile
+    const allProfiles = (pluginConfig.datacite_profiles && pluginConfig.datacite_profiles.profiles) || [];
+    const dataciteConfig = allProfiles.find(p => p.id === profileId);
+    if (!dataciteConfig) {
+        console.error(`No datacite profile found with id "${profileId}"`);
+        console.log(JSON.stringify({ "error": { "code": "datacite.config.profile_not_found", "description": `No profile configured with id "${profileId}"` } }));
+        process.exit(0);
+    }
+
+    // Filter field mappings for this profile
+    const allFieldMappings = (pluginConfig.datacite_field_mappings && pluginConfig.datacite_field_mappings.field_mappings) || [];
+    const fieldMappings = allFieldMappings.filter(m => m.profile_id === profileId);
 
     // Validate required config
     if (!dataciteConfig.repository_id || !dataciteConfig.password || !dataciteConfig.doi_prefix) {

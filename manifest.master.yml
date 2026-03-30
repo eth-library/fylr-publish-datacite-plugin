@@ -9,7 +9,7 @@ plugin:
 extensions:
   webhook/register-doi:
     plugin_user:
-      base_config: "datacite.api_user"
+      base_config: "datacite_global.api_user"
     exec:
       service: "node"
       commands:
@@ -25,46 +25,58 @@ extensions:
               value: "%info.json%"
 
 base_config:
-  - name: datacite
+  - name: datacite_global
     parameters:
-      repository_id:
-        type: text
-        position: 0
-      password:
-        type: text
-        position: 1
-      doi_prefix:
-        type: text
-        position: 2
-      api_url:
-        type: text
-        position: 3
-        default: "https://api.test.datacite.org"
-      collector_name:
-        type: text
-        position: 4
-      publish_as_findable:
-        type: bool
-        position: 5
-        default: false
-      detail_url_template:
-        type: text
-        position: 6
       api_user:
         type: user
-        position: 7
-  - name: datacite_mapping
+        position: 0
+  - name: datacite_profiles
     parameters:
-      field_mapping:
+      profiles:
         type: table
         position: 0
         fields:
-          - name: datacite_field
+          - name: id
             type: text
             position: 0
-          - name: fylr_field_path
+          - name: repository_id
             type: text
             position: 1
-          - name: default_value
+          - name: password
             type: text
             position: 2
+          - name: doi_prefix
+            type: text
+            position: 3
+          - name: api_url
+            type: text
+            position: 4
+            default: "https://api.test.datacite.org"
+          - name: collector_name
+            type: text
+            position: 5
+          - name: publish_as_findable
+            type: bool
+            position: 6
+            default: false
+          - name: detail_url_template
+            type: text
+            position: 7
+  - name: datacite_field_mappings
+    parameters:
+      field_mappings:
+        type: table
+        position: 0
+        fields:
+          - name: profile_id
+            type: text
+            position: 0
+          - name: datacite_field
+            type: text
+            position: 1
+          - name: fylr_field_path
+            type: text
+            position: 2
+          - name: default_value
+            type: text
+            position: 3
