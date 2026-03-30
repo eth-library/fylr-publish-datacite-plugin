@@ -118,7 +118,6 @@ async function main() {
 
     const results = [];
     const errors = [];
-    const fetchDebugLog = [];
 
     for (const obj of objects) {
         const systemObjectId = obj._system_object_id;
@@ -149,7 +148,7 @@ async function main() {
 
             // Prefer _current which contains the full field data; fall back to top-level obj
             const sourceObj = (obj._current && obj._current[objecttype]) ? obj._current : obj;
-            const resolvedValue = await resolveFieldPathAsync(sourceObj, objecttype, resolvedPath, fylrApiUrl, accessToken, fetchDebugLog);
+            const resolvedValue = await resolveFieldPathAsync(sourceObj, objecttype, resolvedPath, fylrApiUrl, accessToken);
             mappedFields[dataciteField] = resolvedValue || defaultValue || '';
         }
 
@@ -324,7 +323,7 @@ async function main() {
     }
 
     // Output result summary (objects array is always empty as we don't modify objects)
-    console.log(JSON.stringify({ "objects": [], "processed": results.length, "errors": errors, "fetch_debug": fetchDebugLog }));
+    console.log(JSON.stringify({ "objects": [], "processed": results.length, "errors": errors }));
     process.exit(0);
 }
 
@@ -333,7 +332,7 @@ async function main() {
  * and fetches linked objects from the fylr API when the path goes deeper
  * than what the webhook payload includes.
  */
-async function resolveFieldPathAsync(obj, objecttype, dotPath, fylrApiUrl, accessToken, debugLog) {
+async function resolveFieldPathAsync(obj, objecttype, dotPath, fylrApiUrl, accessToken) {
     if (!dotPath || dotPath.trim() === '') return undefined;
     if (!obj || !objecttype || !obj[objecttype]) return undefined;
 
@@ -359,7 +358,6 @@ async function resolveFieldPathAsync(obj, objecttype, dotPath, fylrApiUrl, acces
                     method: 'GET',
                     headers: { 'Authorization': 'Bearer ' + accessToken }
                 });
-                if (debugLog) debugLog.push({ fetch_url: fetchUrl, status: resp.statusCode, body_snippet: resp.body.slice(0, 300) });
                 if (resp.statusCode === 200) {
                     const fetched = JSON.parse(resp.body);
                     const fetchedObj = Array.isArray(fetched) ? fetched[0] : ((fetched.objects || [])[0] || fetched);
@@ -368,9 +366,11 @@ async function resolveFieldPathAsync(obj, objecttype, dotPath, fylrApiUrl, acces
                         current = inner;
                         continue;
                     }
+                } else {
+                    console.error(`Linked object fetch failed: ${resp.statusCode} ${fetchUrl}`);
                 }
             } catch (e) {
-                if (debugLog) debugLog.push({ fetch_error: e.message, fetch_url: fetchUrl });
+                console.error(`Linked object fetch error: ${e.message} ${fetchUrl}`);
             }
         }
 
@@ -378,14 +378,13 @@ async function resolveFieldPathAsync(obj, objecttype, dotPath, fylrApiUrl, acces
             // If current is a linked object wrapper, fetch the full object and retry
             if (current._objecttype && current._system_object_id && fylrApiUrl && accessToken) {
                 const innerId = current[current._objecttype] && current[current._objecttype]._id;
-            const fetchUrl = `${fylrApiUrl}/api/v1/db/${current._objecttype}/_all_fields/${innerId}?format=long`;
+                const fetchUrl = `${fylrApiUrl}/api/v1/db/${current._objecttype}/_all_fields/${innerId}?format=long`;
                 try {
                     const resp = await httpRequest({
                         url: fetchUrl,
                         method: 'GET',
                         headers: { 'Authorization': 'Bearer ' + accessToken }
                     });
-                    if (debugLog) debugLog.push({ fetch_url: fetchUrl, status: resp.statusCode, body_snippet: resp.body.slice(0, 300) });
                     if (resp.statusCode === 200) {
                         const fetched = JSON.parse(resp.body);
                         const fetchedObj = Array.isArray(fetched) ? fetched[0] : ((fetched.objects || [])[0] || fetched);
@@ -394,10 +393,11 @@ async function resolveFieldPathAsync(obj, objecttype, dotPath, fylrApiUrl, acces
                             current = inner[part];
                             continue;
                         }
-                        if (debugLog) debugLog.push({ fetch_inner_keys: inner ? Object.keys(inner).join(',') : 'null', looking_for: part });
+                    } else {
+                        console.error(`Linked object fetch failed: ${resp.statusCode} ${fetchUrl}`);
                     }
                 } catch (e) {
-                    if (debugLog) debugLog.push({ fetch_error: e.message, fetch_url: fetchUrl });
+                    console.error(`Linked object fetch error: ${e.message} ${fetchUrl}`);
                 }
             }
             return undefined;
