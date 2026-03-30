@@ -166,9 +166,9 @@ async function main() {
                 attributes: {
                     doi: doi,
                     prefix: doiPrefix,
-                    creators: [{ name: mappedFields.creator || "Unknown" }],
-                    titles: [{ title: mappedFields.title || "Untitled" }],
-                    publisher: { name: mappedFields.publisher || "Unknown" },
+                    creators: [{ name: mappedFields.creator || ":unkn" }],
+                    titles: [{ title: mappedFields.title || ":unkn" }],
+                    publisher: { name: mappedFields.publisher || ":unkn" },
                     publicationYear: (() => { const s = mappedFields.publicationYear || mappedFields.date || ''; return parseInt(s) || (s ? new Date(s).getFullYear() : null) || new Date().getFullYear(); })(),
                     types: { resourceTypeGeneral: mappedFields.resourceTypeGeneral || mappedFields.type || "Dataset" },
                     schemaVersion: "http://datacite.org/schema/kernel-4"
