@@ -351,7 +351,8 @@ async function resolveFieldPathAsync(obj, objecttype, dotPath, fylrApiUrl, acces
         // inner object (e.g. hersteller.hersteller.name), fetch the full object first
         // because the inner object only has {_id, _version} in standard format.
         if (current._objecttype && current._system_object_id && part === current._objecttype && fylrApiUrl && accessToken) {
-            const fetchUrl = `${fylrApiUrl}/api/v1/db/${current._objecttype}/system_object_id/${current._system_object_id}?format=long&mask=_all_fields`;
+            const innerId = current[current._objecttype] && current[current._objecttype]._id;
+            const fetchUrl = `${fylrApiUrl}/api/v1/db/${current._objecttype}/_all_fields/${innerId}?format=long`;
             try {
                 const resp = await httpRequest({
                     url: fetchUrl,
@@ -376,7 +377,8 @@ async function resolveFieldPathAsync(obj, objecttype, dotPath, fylrApiUrl, acces
         if (!(part in current)) {
             // If current is a linked object wrapper, fetch the full object and retry
             if (current._objecttype && current._system_object_id && fylrApiUrl && accessToken) {
-                const fetchUrl = `${fylrApiUrl}/api/v1/db/${current._objecttype}/system_object_id/${current._system_object_id}?format=long&mask=_all_fields`;
+                const innerId = current[current._objecttype] && current[current._objecttype]._id;
+            const fetchUrl = `${fylrApiUrl}/api/v1/db/${current._objecttype}/_all_fields/${innerId}?format=long`;
                 try {
                     const resp = await httpRequest({
                         url: fetchUrl,
