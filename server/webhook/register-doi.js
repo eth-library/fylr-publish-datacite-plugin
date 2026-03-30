@@ -362,7 +362,7 @@ async function resolveFieldPathAsync(obj, objecttype, dotPath, fylrApiUrl, acces
                 if (debugLog) debugLog.push({ fetch_url: fetchUrl, status: resp.statusCode, body_snippet: resp.body.slice(0, 300) });
                 if (resp.statusCode === 200) {
                     const fetched = JSON.parse(resp.body);
-                    const fetchedObj = (fetched.objects || [])[0] || fetched;
+                    const fetchedObj = Array.isArray(fetched) ? fetched[0] : ((fetched.objects || [])[0] || fetched);
                     const inner = fetchedObj && fetchedObj[current._objecttype];
                     if (inner) {
                         current = inner;
@@ -388,7 +388,7 @@ async function resolveFieldPathAsync(obj, objecttype, dotPath, fylrApiUrl, acces
                     if (debugLog) debugLog.push({ fetch_url: fetchUrl, status: resp.statusCode, body_snippet: resp.body.slice(0, 300) });
                     if (resp.statusCode === 200) {
                         const fetched = JSON.parse(resp.body);
-                        const fetchedObj = (fetched.objects || [])[0] || fetched;
+                        const fetchedObj = Array.isArray(fetched) ? fetched[0] : ((fetched.objects || [])[0] || fetched);
                         const inner = fetchedObj && fetchedObj[current._objecttype];
                         if (inner && part in inner) {
                             current = inner[part];
