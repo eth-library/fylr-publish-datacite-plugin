@@ -1,0 +1,17 @@
+key,de-DE,en-US
+server.config.group.system.plugin_fylr_plugin_datacite.title,DataCite DOI Registrierung,DataCite DOI Registration
+server.config.name.system.datacite,DataCite Zugangsdaten,DataCite Credentials
+server.config.parameter.system.datacite.repository_id.label,Repository ID,Repository ID
+server.config.parameter.system.datacite.password.label,Passwort,Password
+server.config.parameter.system.datacite.doi_prefix.label,DOI Prefix (z.B. 10.5072/fylr-),DOI Prefix (e.g. 10.5072/fylr-)
+server.config.parameter.system.datacite.api_url.label,DataCite API URL,DataCite API URL
+server.config.parameter.system.datacite.collector_name.label,Collector Name,Collector Name
+server.config.parameter.system.datacite.publish_as_findable.label,DOI Status,DOI Status
+server.config.parameter.system.datacite.publish_as_findable.checkbox,Als Findable publizieren (statt Draft),Publish as Findable (instead of Draft)
+server.config.parameter.system.datacite.detail_url_template.label,Detail-URL Vorlage (z.B. https://fylr.example.com/#/detail/%system_object_id%),Detail URL Template (e.g. https://fylr.example.com/#/detail/%system_object_id%)
+server.config.parameter.system.datacite.api_user.label,API-Benutzer,API User
+server.config.name.system.datacite_mapping,DataCite Feld-Zuordnung,DataCite Field Mapping
+server.config.parameter.system.datacite_mapping.field_mapping.label,Feld-Zuordnung,Field Mapping
+server.config.parameter.system.datacite_mapping.field_mapping.datacite_field.label,DataCite Feld,DataCite Field
+server.config.parameter.system.datacite_mapping.field_mapping.fylr_field_path.label,fylr Feld-Pfad,fylr Field Path
+server.config.parameter.system.datacite_mapping.field_mapping.default_value.label,Standardwert,Default Value
