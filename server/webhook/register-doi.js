@@ -118,8 +118,10 @@ async function main() {
     }
 
     // Get access tokens for fylr API callbacks
-    const fylrApiUrl = (info && info.api_url) || '';
+    // Use internal api_url for publish to avoid proxy interference
+    const fylrApiUrl = (info && info.api_url) || (info && info.external_url) || '';
     const accessToken = (info && info.plugin_user_access_token) || (info && info.api_user_access_token) || '';
+    const sessionToken = (info && info.api_user_access_token) || '';
 
     // DataCite Basic Auth header
     const dataciteAuth = 'Basic ' + Buffer.from(dataciteConfig.repository_id + ':' + dataciteConfig.password).toString('base64');
@@ -279,22 +281,24 @@ async function main() {
         if (fylrApiUrl && accessToken) {
             const publishPayload = [{
                 system_object_id: systemObjectId,
-                collector: collectorName,
+                internalname: collectorName,
                 publish_uri: 'https://doi.org/' + doi,
                 easydb_uri: landingUrl
             }];
 
-            console.error(`Posting publish entry to ${fylrApiUrl}/api/v1/publish`);
+            const publishUrl = fylrApiUrl + '/api/v1/publish';
+            const publishBody = JSON.stringify(publishPayload);
+            console.error(`Posting publish entry to ${publishUrl} (collector: ${collectorName})`);
 
             try {
                 const publishResponse = await httpRequest({
-                    url: fylrApiUrl + '/api/v1/publish',
+                    url: publishUrl,
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': 'Bearer ' + accessToken
                     },
-                    body: JSON.stringify(publishPayload)
+                    body: publishBody
                 });
 
                 if (publishResponse.statusCode >= 200 && publishResponse.statusCode < 300) {
@@ -311,7 +315,7 @@ async function main() {
                         system_object_id: systemObjectId,
                         doi: doi,
                         publish_uri: 'https://doi.org/' + doi,
-                        warning: 'DOI created but fylr publish entry failed'
+                        warning: `DOI created but fylr publish entry failed: ${publishResponse.statusCode} ${publishResponse.body}`
                     });
                 }
             } catch (e) {
@@ -340,8 +344,12 @@ async function main() {
         console.error('Errors:', JSON.stringify(errors));
     }
 
+    // Debug: log top-level keys of info to help identify available fields
+    const infoKeys = info ? Object.keys(info).reduce((acc, k) => { acc[k] = typeof info[k]; return acc; }, {}) : {};
+    console.error('info.json top-level keys:', JSON.stringify(infoKeys));
+
     // Output result summary (objects array is always empty as we don't modify objects)
-    console.log(JSON.stringify({ "objects": [], "processed": results.length, "errors": errors, "warnings": warnings }));
+    console.log(JSON.stringify({ "objects": [], "processed": results.length, "errors": errors, "warnings": warnings, "results": results, "_debug_profile": { collector_name: collectorName, api_url: apiUrl, fylr_api_url: fylrApiUrl, internal_api_url: info && info.api_url, external_url: info && info.external_url, has_token: !!accessToken, has_session_token: !!sessionToken, info_keys: Object.keys(info || {}) } }));
     process.exit(0);
 }
 
