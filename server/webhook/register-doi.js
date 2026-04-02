@@ -280,23 +280,25 @@ async function main() {
         // POST publish entry back to fylr
         if (fylrApiUrl && accessToken) {
             const publishPayload = [{
-                system_object_id: systemObjectId,
-                internalname: collectorName,
-                publish_uri: 'https://doi.org/' + doi,
-                easydb_uri: landingUrl
+                _basetype: 'publish',
+                publish: {
+                    system_object_id: systemObjectId,
+                    collector: collectorName,
+                    publish_uri: 'https://doi.org/' + doi,
+                    easydb_uri: landingUrl
+                }
             }];
 
-            const publishUrl = fylrApiUrl + '/api/v1/publish';
+            const publishUrl = fylrApiUrl + '/api/v1/publish?access_token=' + encodeURIComponent(accessToken);
             const publishBody = JSON.stringify(publishPayload);
-            console.error(`Posting publish entry to ${publishUrl} (collector: ${collectorName})`);
+            console.error(`Posting publish entry to ${fylrApiUrl}/api/v1/publish (collector: ${collectorName})`);
 
             try {
                 const publishResponse = await httpRequest({
                     url: publishUrl,
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + accessToken
+                        'Content-Type': 'application/json'
                     },
                     body: publishBody
                 });
