@@ -121,21 +121,21 @@ async function main() {
     // Use internal api_url for publish to avoid proxy interference
     const fylrApiUrl = (info && info.api_url) || (info && info.external_url) || '';
     const accessToken = (info && info.plugin_user_access_token) || (info && info.api_user_access_token) || '';
-    const sessionToken = (info && info.api_user_access_token) || '';
+    // const sessionToken = (info && info.api_user_access_token) || '';
 
     // DataCite Basic Auth header
     const dataciteAuth = 'Basic ' + Buffer.from(dataciteConfig.repository_id + ':' + dataciteConfig.password).toString('base64');
 
     const objects = data.objects || [];
     if (objects.length === 0) {
-        console.error('No objects to process');
+        // console.error('No objects to process');
         console.log(JSON.stringify({ "objects": [] }));
         process.exit(0);
     }
 
-    console.error(`Processing ${objects.length} object(s) for DOI registration`);
+    // console.error(`Processing ${objects.length} object(s) for DOI registration`);
 
-    const results = [];
+    // const results = [];
     const errors = [];
     const warnings = [];
 
@@ -144,12 +144,11 @@ async function main() {
         const objecttype = obj._objecttype;
 
         if (!systemObjectId || !objecttype) {
-            console.error('Object missing _system_object_id or _objecttype, skipping');
             errors.push({ system_object_id: systemObjectId, error: 'Missing _system_object_id or _objecttype' });
             continue;
         }
 
-        console.error(`Processing object ${systemObjectId} (type: ${objecttype})`);
+        // console.error(`Processing object ${systemObjectId} (type: ${objecttype})`);
 
         // Resolve field mappings
         const mappedFields = {};
@@ -226,7 +225,7 @@ async function main() {
             datacitePayload.data.attributes.subjects = subjects;
         }
 
-        console.error(`Creating DOI ${doi} at ${apiUrl}/dois`);
+        // console.error(`Creating DOI ${doi} at ${apiUrl}/dois`);
 
         // POST to DataCite REST API
         let dataciteResponse;
@@ -241,14 +240,13 @@ async function main() {
                 body: JSON.stringify(datacitePayload)
             });
         } catch (e) {
-            console.error(`DataCite API request failed for object ${systemObjectId}: ${e.message}`);
             errors.push({ system_object_id: systemObjectId, error: `DataCite request failed: ${e.message}` });
             continue;
         }
 
         // If DOI already exists (422), try PUT to update
         if (dataciteResponse.statusCode === 422) {
-            console.error(`DOI ${doi} already exists, attempting update via PUT`);
+            // console.error(`DOI ${doi} already exists, attempting update via PUT`);
             try {
                 dataciteResponse = await httpRequest({
                     url: apiUrl + '/dois/' + encodeURIComponent(doi),
@@ -260,16 +258,14 @@ async function main() {
                     body: JSON.stringify(datacitePayload)
                 });
             } catch (e) {
-                console.error(`DataCite PUT update failed for object ${systemObjectId}: ${e.message}`);
                 errors.push({ system_object_id: systemObjectId, error: `DataCite update failed: ${e.message}` });
                 continue;
             }
         }
 
         if (dataciteResponse.statusCode >= 200 && dataciteResponse.statusCode < 300) {
-            console.error(`DOI ${doi} registered successfully (status: ${dataciteResponse.statusCode})`);
+            // console.error(`DOI ${doi} registered successfully (status: ${dataciteResponse.statusCode})`);
         } else {
-            console.error(`DataCite API error for object ${systemObjectId}: ${dataciteResponse.statusCode} ${dataciteResponse.body}`);
             errors.push({
                 system_object_id: systemObjectId,
                 error: `DataCite API returned ${dataciteResponse.statusCode}: ${dataciteResponse.body}`
@@ -291,7 +287,7 @@ async function main() {
 
             const publishUrl = fylrApiUrl + '/api/v1/publish?access_token=' + encodeURIComponent(accessToken);
             const publishBody = JSON.stringify(publishPayload);
-            console.error(`Posting publish entry to ${fylrApiUrl}/api/v1/publish (collector: ${collectorName})`);
+            // console.error(`Posting publish entry to ${fylrApiUrl}/api/v1/publish (collector: ${collectorName})`);
 
             try {
                 const publishResponse = await httpRequest({
@@ -304,54 +300,35 @@ async function main() {
                 });
 
                 if (publishResponse.statusCode >= 200 && publishResponse.statusCode < 300) {
-                    console.error(`Publish entry created for object ${systemObjectId}`);
-                    results.push({
-                        system_object_id: systemObjectId,
-                        doi: doi,
-                        publish_uri: 'https://doi.org/' + doi
-                    });
+                    // console.error(`Publish entry created for object ${systemObjectId}`);
                 } else {
-                    console.error(`fylr publish API error: ${publishResponse.statusCode} ${publishResponse.body}`);
-                    // DOI was already created at DataCite, so still count as partial success
-                    results.push({
+                    errors.push({
                         system_object_id: systemObjectId,
-                        doi: doi,
-                        publish_uri: 'https://doi.org/' + doi,
-                        warning: `DOI created but fylr publish entry failed: ${publishResponse.statusCode} ${publishResponse.body}`
+                        error: `fylr publish failed: ${publishResponse.statusCode} ${publishResponse.body}`
                     });
                 }
             } catch (e) {
-                console.error(`fylr publish API request failed: ${e.message}`);
-                results.push({
+                errors.push({
                     system_object_id: systemObjectId,
-                    doi: doi,
-                    publish_uri: 'https://doi.org/' + doi,
-                    warning: 'DOI created but fylr publish entry failed: ' + e.message
+                    error: `fylr publish request failed: ${e.message}`
                 });
             }
         } else {
-            console.error('No fylr API URL or access token available, skipping publish entry');
-            results.push({
+            errors.push({
                 system_object_id: systemObjectId,
-                doi: doi,
-                publish_uri: 'https://doi.org/' + doi,
-                warning: 'No API URL or access token for publish callback'
+                error: 'No fylr API URL or access token available for publish callback'
             });
         }
     }
 
-    // Log summary
-    console.error(`Done. ${results.length} DOI(s) registered, ${errors.length} error(s)`);
-    if (errors.length > 0) {
-        console.error('Errors:', JSON.stringify(errors));
-    }
+    // console.error(`Done. ${results.length} DOI(s) registered, ${errors.length} error(s)`);
 
     // Debug: log top-level keys of info to help identify available fields
-    const infoKeys = info ? Object.keys(info).reduce((acc, k) => { acc[k] = typeof info[k]; return acc; }, {}) : {};
-    console.error('info.json top-level keys:', JSON.stringify(infoKeys));
+    // const infoKeys = info ? Object.keys(info).reduce((acc, k) => { acc[k] = typeof info[k]; return acc; }, {}) : {};
+    // console.error('info.json top-level keys:', JSON.stringify(infoKeys));
+    // console.error('_debug_profile:', JSON.stringify({ collector_name: collectorName, api_url: apiUrl, fylr_api_url: fylrApiUrl, internal_api_url: info && info.api_url, external_url: info && info.external_url, has_token: !!accessToken, has_session_token: !!sessionToken }));
 
-    // Output result summary (objects array is always empty as we don't modify objects)
-    console.log(JSON.stringify({ "objects": [], "processed": results.length, "errors": errors, "warnings": warnings, "results": results, "_debug_profile": { collector_name: collectorName, api_url: apiUrl, fylr_api_url: fylrApiUrl, internal_api_url: info && info.api_url, external_url: info && info.external_url, has_token: !!accessToken, has_session_token: !!sessionToken, info_keys: Object.keys(info || {}) } }));
+    console.log(JSON.stringify({ "objects": [], "errors": errors }));
     process.exit(0);
 }
 
