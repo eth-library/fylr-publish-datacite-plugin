@@ -104,6 +104,7 @@ async function main() {
     const collectorName = dataciteConfig.collector_name || 'datacite';
     const publishAsFindable = dataciteConfig.publish_as_findable || false;
     const detailUrlTemplate = dataciteConfig.detail_url_template || '';
+    const doiResolverUrl = (dataciteConfig.doi_resolver_url || 'https://doi.org').replace(/\/$/, '');
 
     // Validate findable requires detail URL
     if (publishAsFindable && !detailUrlTemplate) {
@@ -280,7 +281,7 @@ async function main() {
                 publish: {
                     system_object_id: systemObjectId,
                     collector: collectorName,
-                    publish_uri: 'https://doi.org/' + doi,
+                    publish_uri: doiResolverUrl + '/' + doi,
                     easydb_uri: landingUrl
                 }
             }];

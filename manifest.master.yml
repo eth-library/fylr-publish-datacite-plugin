@@ -62,6 +62,10 @@ base_config:
           - name: detail_url_template
             type: text
             position: 7
+          - name: doi_resolver_url
+            type: text
+            position: 8
+            default: "https://doi.org"
   - name: datacite_field_mappings
     parameters:
       field_mappings:
