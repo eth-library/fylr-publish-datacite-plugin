@@ -40,6 +40,7 @@ Each row defines one DataCite repository. Multiple profiles can be configured an
 | Collector Name | Internal name of the collector as configured in the fylr base config publish settings |
 | Publish as Findable | If enabled, the DOI is immediately published (findable). Requires a Detail URL Template. |
 | Detail URL Template | URL template for the object's landing page. Use `%system_object_id%` as placeholder. |
+| DOI Resolver URL | The first part of the URL that will be written in the publish entry in fylr. The URL setting in the collector base config will be ignored. |
 
 ### Field Mappings (`DataCite Field Mappings`)
 

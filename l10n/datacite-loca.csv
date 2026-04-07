@@ -13,6 +13,7 @@ server.config.parameter.system.datacite_profiles.profiles.collector_name.label,C
 server.config.parameter.system.datacite_profiles.profiles.publish_as_findable.label,DOI Status,DOI Status
 server.config.parameter.system.datacite_profiles.profiles.publish_as_findable.checkbox,Als Findable publizieren (statt Draft),Publish as Findable (instead of Draft)
 server.config.parameter.system.datacite_profiles.profiles.detail_url_template.label,Detail-URL Vorlage,Detail URL Template
+server.config.parameter.system.datacite_profiles.profiles.doi_resolver_url.label,DOI Resolver URL, DOI Resolver URL
 server.config.name.system.datacite_field_mappings,DataCite Feld-Zuordnung,DataCite Field Mappings
 server.config.parameter.system.datacite_field_mappings.field_mappings.label,Feld-Zuordnung,Field Mappings
 server.config.parameter.system.datacite_field_mappings.field_mappings.profile_id.label,Profil-ID,Profile ID
