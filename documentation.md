@@ -135,9 +135,10 @@ All human-readable labels in the admin UI come from a CSV file declared in the m
 
 ```
 fylr-plugin-datacite/
-├── manifest.master.yml        # Plugin manifest (becomes manifest.yml in the zip)
+├── manifest.master.yml        # Plugin manifest source (becomes manifest.yml in the zip)
 ├── Makefile                   # Build script — produces fylr-plugin-datacite.zip
 ├── README.md                  # User-facing documentation
+├── CHANGELOG.md               # Version history
 ├── documentation.md           # This file — developer documentation
 ├── l10n/
 │   └── datacite-loca.csv      # Localization table (de-DE, en-US)
@@ -146,7 +147,7 @@ fylr-plugin-datacite/
         └── register-doi.js    # The one and only script (Node.js, no deps)
 ```
 
-Everything inside `server/` and `l10n/`, plus the renamed `manifest.master.yml → manifest.yml`, ends up in the zip.
+Everything inside `server/` and `l10n/`, plus the processed `manifest.master.yml → manifest.yml`, ends up in the zip.
 
 ## Build and Release
 
@@ -158,9 +159,11 @@ make zip
 
 This produces `build/fylr-plugin-datacite.zip`, which is uploaded to fylr under **Plugins**. The Makefile:
 
-1. Copies `manifest.master.yml` to `build/fylr-plugin-datacite/manifest.yml` (the filename change is required — fylr expects exactly `manifest.yml`).
+1. Runs `sed` on `manifest.master.yml` to substitute the `%%BUILD_INFO%%` placeholder with the current git commit hash and UTC build timestamp (e.g. `a3f1c2b (2026-04-14T10:23:00Z)`), writing the result to `build/fylr-plugin-datacite/manifest.yml`. The filename change (`manifest.master.yml` → `manifest.yml`) is also required — fylr expects exactly `manifest.yml`.
 2. Copies `server/` and `l10n/` verbatim.
 3. Zips the result.
+
+The substituted build info is what appears as **Build Info** in the fylr plugin manager UI. To release a new version: update `version` in `manifest.master.yml`, add an entry to `CHANGELOG.md`, then `make zip`.
 
 There is no transpilation, bundling, or dependency install step. The script is plain Node.js and runs in whatever node version the fylr node exec service ships.
 
@@ -168,7 +171,7 @@ There is no transpilation, bundling, or dependency install step. The script is p
 
 The manifest has three top-level sections:
 
-1. `plugin` — name, version, displayname, and the path to the l10n CSV.
+1. `plugin` — name, version, displayname, l10n path, short `info` description (shown in the plugin manager), and `build_info` (a placeholder substituted at build time with the git hash and timestamp — see [Build and Release](#build-and-release)).
 2. `extensions` — declares `webhook/register-doi` (see [How exec scripts are invoked](#how-exec-scripts-are-invoked)). The `plugin_user` directive points to `datacite_global.api_user`, wiring up the token injection.
 3. `base_config` — declares the three configuration sections described below.
 
@@ -213,7 +216,7 @@ If the admin forgets the query parameter, the script fails fast with `datacite.c
    - Construct the DOI as `<doi_prefix><system_object_id>`.
    - Build the DataCite JSON:API payload.
    - POST to `<api_url>/dois`. If DataCite returns 422 (exists), retry with PUT to `<api_url>/dois/<doi>`.
-   - POST a publish entry to `<fylr_api_url>/api/v1/publish?access_token=<token>` so the DOI appears in the object's publish tab.
+   - POST a publish entry to `<fylr_api_url>/api/v1/publish` (Bearer auth) so the DOI appears in the object's publish tab.
 6. Accumulate any errors and write `{"objects": [], "errors": [...]}` to stdout.
 
 ## The Main Script (`server/webhook/register-doi.js`)
