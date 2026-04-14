@@ -1,7 +1,6 @@
 plugin:
   name: fylr-plugin-datacite
   version: "1.0.0"
-  build_info: "%%BUILD_INFO%%"
   # url: https://github.com/merdoes/fylr-plugin-datacite
   l10n: l10n/datacite-loca.csv
   displayname:

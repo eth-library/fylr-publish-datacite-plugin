@@ -159,11 +159,15 @@ make zip
 
 This produces `build/fylr-plugin-datacite.zip`, which is uploaded to fylr under **Plugins**. The Makefile:
 
-1. Runs `sed` on `manifest.master.yml` to substitute the `%%BUILD_INFO%%` placeholder with the current git commit hash and UTC build timestamp (e.g. `a3f1c2b (2026-04-14T10:23:00Z)`), writing the result to `build/fylr-plugin-datacite/manifest.yml`. The filename change (`manifest.master.yml` → `manifest.yml`) is also required — fylr expects exactly `manifest.yml`.
-2. Copies `server/` and `l10n/` verbatim.
-3. Zips the result.
+1. Runs the `buildinfojson` target, which calls `git show` and `date` to collect the repository name, full commit hash, last-changed timestamp, build date, and optional release tag, writing them as `build-info.json` in the repo root. This is the [pattern prescribed by the official fylr plugin docs](https://docs.fylr.io/for-developers/plugin/release).
+2. Copies `manifest.master.yml` → `build/fylr-plugin-datacite/manifest.yml` (the filename change is required — fylr expects exactly `manifest.yml`).
+3. Copies `build-info.json` into the build directory so it ends up inside the zip.
+4. Copies `server/` and `l10n/` verbatim.
+5. Zips the result.
 
-The substituted build info is what appears as **Build Info** in the fylr plugin manager UI. To release a new version: update `version` in `manifest.master.yml`, add an entry to `CHANGELOG.md`, then `make zip`.
+`build-info.json` is what the fylr plugin manager reads to display **Build Info**. It is a build artifact and is listed in `.gitignore`. When releasing via GitHub Actions, pass the tag as `make zip RELEASE_TAG=v1.0.0`; the `release` field in the JSON will be populated accordingly.
+
+To release a new version: update `version` in `manifest.master.yml`, add an entry to `CHANGELOG.md`, then `make zip`.
 
 There is no transpilation, bundling, or dependency install step. The script is plain Node.js and runs in whatever node version the fylr node exec service ships.
 
@@ -171,7 +175,7 @@ There is no transpilation, bundling, or dependency install step. The script is p
 
 The manifest has three top-level sections:
 
-1. `plugin` — name, version, displayname, l10n path, short `info` description (shown in the plugin manager), and `build_info` (a placeholder substituted at build time with the git hash and timestamp — see [Build and Release](#build-and-release)).
+1. `plugin` — name, version, displayname, l10n path, and short `info` description (shown in the plugin manager). Build metadata is not embedded in the manifest — it lives in a separate `build-info.json` file generated at build time (see [Build and Release](#build-and-release)).
 2. `extensions` — declares `webhook/register-doi` (see [How exec scripts are invoked](#how-exec-scripts-are-invoked)). The `plugin_user` directive points to `datacite_global.api_user`, wiring up the token injection.
 3. `base_config` — declares the three configuration sections described below.
 
