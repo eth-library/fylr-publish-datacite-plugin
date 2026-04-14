@@ -1,10 +1,15 @@
 plugin:
   name: fylr-plugin-datacite
-  version: "1"
+  version: "1.0.0"
+  build_info: "%%BUILD_INFO%%"
+  # url: https://github.com/merdoes/fylr-plugin-datacite
   l10n: l10n/datacite-loca.csv
   displayname:
     de-DE: DataCite DOI Registrierung
     en-US: DataCite DOI Registration
+  info:
+    de-DE: Webhook-Plugin zur Registrierung von DOIs bei DataCite. Unterstützt mehrere Repositorys, konfigurierbare Feldzuordnungen und automatisches Zurückschreiben der DOI in den Publish-Tab des Objekts.
+    en-US: Webhook plugin for registering DOIs with DataCite. Supports multiple repositories, configurable field mappings, and automatic write-back of the registered DOI to the object's publish tab.
 
 extensions:
   webhook/register-doi:
