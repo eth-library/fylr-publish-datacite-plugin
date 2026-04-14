@@ -286,16 +286,17 @@ async function main() {
                 }
             }];
 
-            const publishUrl = fylrApiUrl + '/api/v1/publish?access_token=' + encodeURIComponent(accessToken);
+            const publishUrl = fylrApiUrl + '/api/v1/publish';
             const publishBody = JSON.stringify(publishPayload);
-            // console.error(`Posting publish entry to ${fylrApiUrl}/api/v1/publish (collector: ${collectorName})`);
+            // console.error(`Posting publish entry to ${publishUrl} (collector: ${collectorName})`);
 
             try {
                 const publishResponse = await httpRequest({
                     url: publishUrl,
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + accessToken
                     },
                     body: publishBody
                 });
@@ -400,10 +401,10 @@ async function resolveFieldPathAsync(obj, objecttype, dotPath, fylrApiUrl, acces
                             continue;
                         }
                     } else {
-                        console.error(`Linked object fetch failed: ${resp.statusCode} ${fetchUrl}`);
+                        if (warnings) warnings.push(`Linked object fetch failed: ${resp.statusCode} ${fetchUrl}`);
                     }
                 } catch (e) {
-                    console.error(`Linked object fetch error: ${e.message} ${fetchUrl}`);
+                    if (warnings) warnings.push(`Linked object fetch error: ${e.message} ${fetchUrl}`);
                 }
             }
             return undefined;

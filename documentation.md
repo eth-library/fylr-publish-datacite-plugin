@@ -32,7 +32,6 @@ This document explains how the `fylr-plugin-datacite` plugin is implemented. It 
    - [Draft vs Findable DOIs](#draft-vs-findable-dois)
 10. [fylr Publish Callback](#fylr-publish-callback)
     - [Why the `_basetype` wrapper is required](#why-the-_basetype-wrapper-is-required)
-    - [Why `?access_token=` instead of a Bearer header](#why-access_token-instead-of-a-bearer-header)
 11. [Error Handling and Logging](#error-handling-and-logging)
 12. [Common Maintenance Tasks](#common-maintenance-tasks)
 13. [Troubleshooting](#troubleshooting)
@@ -269,7 +268,7 @@ Resolves a dot-separated path (e.g. `haustieranatomie.titel` or `hersteller.hers
 2. **The root is always `obj[objecttype]`** — fylr objects are keyed by objecttype at the top level. Passing in a bare object without that wrapper returns `undefined`.
 3. **Linked objects are shallow in the webhook payload**. When an object links to another object, the webhook payload only carries `{_id, _version}` for the linked object. If a dot-path descends into a linked object (either directly navigating into its typed key or trying to access a missing field on a wrapper), the function fetches the full linked object via `GET /api/v1/db/<objecttype>/_all_fields/<id>?format=long` using the plugin user's Bearer token, then continues the walk.
 
-Both linked-object-fetch branches use `warnings`-style push in one path and `console.error` in the other — consider this a known inconsistency that should be unified if you touch the function. Errors from fetches are never fatal; the path just returns `undefined` and the mapping falls back to its `default_value`.
+Both linked-object-fetch branches record failures via the shared `warnings` array so the caller can decide how to surface them. Errors from fetches are never fatal; the path just returns `undefined` and the mapping falls back to its `default_value`.
 
 ### `getNestedValue()`
 
@@ -333,22 +332,18 @@ const publishPayload = [{
     }
 }];
 
-const publishUrl = fylrApiUrl + '/api/v1/publish?access_token=' + encodeURIComponent(accessToken);
+const publishUrl = fylrApiUrl + '/api/v1/publish';
 ```
 
-Two aspects of this call are non-obvious enough to warrant their own sections.
+One aspect of this call is non-obvious enough to warrant its own section.
 
 ### Why the `_basetype` wrapper is required
 
 The publish endpoint accepts an array of objects. Each object **must** be wrapped in `{_basetype: 'publish', publish: {...}}` — not flat. Sending a flat object produces `PublishUnknownCollector: collector ""` even when the collector field is set, because the API parser looks up the `collector` field inside the `publish` sub-object specifically.
 
-This is not clearly documented in the public API docs; it was discovered via a support ticket with programmfabrik. If you change this payload shape, expect the same error class of bug.
+This is not clearly documented in the public API docs. It is mentioned in the types part of the official docs though. If you change this payload shape, expect the same error class of bug.
 
-### Why `?access_token=` instead of a Bearer header
-
-The publish endpoint does **not** accept a `Authorization: Bearer <token>` header. The token must come through as a query string parameter: `?access_token=<token>`. Again, not obvious from the docs. Every other fylr API call in this plugin (specifically the linked-object fetch in `resolveFieldPathAsync`) uses a Bearer header as expected — the publish endpoint is the exception.
-
-Using the internal API URL (`info.api_url`) avoids any reverse-proxy stripping of the query parameter.
+Using the internal API URL (`info.api_url`) avoids any reverse-proxy interference.
 
 ## Error Handling and Logging
 
@@ -377,7 +372,7 @@ Using the internal API URL (`info.api_url`) avoids any reverse-proxy stripping o
 | `datacite.config.profile_not_found` | The `id` in the URL does not match any row in `datacite_profiles` |
 | DataCite returns 401 | Bad `repository_id` / `password`, or wrong `api_url` (test vs production mismatch) |
 | DataCite returns 422 with no retry success | The PUT update also failed — check the response body in the event viewer for the actual validation message |
-| `PublishUnknownCollector: collector ""` | The `_basetype` wrapper got removed, or the `collector` field inside `publish` is empty |
+| `PublishUnknownCollector: collector ""` | The `_basetype` wrapper got removed, or the `collector` field inside `publish` is empty, or the collector name doesn't match the one configured in fylr |
 | Publish entry returns 401/403 | The plugin user in `datacite_global.api_user` lacks the `system.api.publish.post` right |
 | Linked-object field resolves to `undefined` | Either the plugin user can't read the linked objecttype, or the path is wrong. Uncomment the linked-object `console.error` lines to see the failed fetch URL. |
 | Admin UI shows raw l10n keys instead of labels | New parameter was added to `manifest.master.yml` but not to `datacite-loca.csv` |
