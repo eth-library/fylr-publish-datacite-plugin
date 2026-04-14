@@ -1,7 +1,7 @@
 plugin:
   name: fylr-plugin-datacite
   version: "1.0.0"
-  # url: https://github.com/merdoes/fylr-plugin-datacite
+  url: https://github.com/eth-library/fylr-publish-datacite-plugin
   l10n: l10n/datacite-loca.csv
   displayname:
     de-DE: DataCite DOI Registrierung
