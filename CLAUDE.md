@@ -1,101 +1,63 @@
-This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+# CLAUDE.md — Project Instructions
 
-Summary:
-1. Primary Request and Intent:
-   The user requested creation of a fylr plugin that contacts the DataCite API to create DOIs for data entries. They provided three reference URLs: easydb publish documentation, DataCite API docs, and the existing `easydb-publish-datacite` GitHub repository. They chose (via interactive questions): a new standalone plugin, Node.js implementation, configurable field mapping table in base_config, and the modern DataCite REST API.
+Context for AI coding assistants working on this plugin. Keep it concise; treat it as a pointer to the real docs rather than a duplicate of them.
 
-   After implementation, the user asked an explanatory question: "How does the authentication to the fylr API work? How do we get the token?"
+## What this is
 
-2. Key Technical Concepts:
-   - **fylr plugin architecture**: manifest.master.yml defines extensions (API endpoints), callbacks, base_config, plugin_user directive
-   - **Extension pattern**: stdin=JSON payload, stdout=JSON response, stderr=debug, `%info.json%` passed as process.argv[2]
-   - **`plugin_user` directive**: tells fylr to inject `plugin_user_access_token` for a configured user into info.json before the script runs
-   - **DataCite REST API**: modern JSON:API at `api.datacite.org/dois`, POST to create, PUT to update, Basic Auth with `repository_id:password`
-   - **DOI states**: Draft (default) vs Findable (add `event: "publish"` to payload)
-   - **fylr /api/v1/publish endpoint**: receives publish entries with `system_object_id`, `collector`, `publish_uri`, `easydb_uri`
-   - **Bearer token auth** for fylr API calls
-   - **Idempotency**: on 422 from DataCite (DOI exists), retry as PUT update
-   - **Field mapping**: admin configures dot-path mappings from fylr object fields to DataCite metadata fields in base_config table
+A fylr webhook plugin that registers DOIs with DataCite when a workflow fires. Multi-repository capable — one plugin instance serves many DataCite repositories, selected per webhook URL via `?repository=<profile-id>`.
 
-3. Files and Code Sections:
+## Where to read first
 
-   **NEW PLUGIN LOCATION**: `c:\Users\merdoes\Documents\fylr-plugin-datacite\`
+- [README.md](README.md) — user-facing overview, installation, admin config
+- [documentation.md](documentation.md) — full developer guide; architecture, per-function descriptions, troubleshooting
+- [CHANGELOG.md](CHANGELOG.md) — release history
 
-   - **`manifest.master.yml`** (new file):
-     - Defines plugin `fylr_plugin_datacite` v1
-     - Extension `webhook/register-doi` with `plugin_user: {base_config: "datacite.api_user"}`
-     - `base_config` section `datacite`: repository_id, password, doi_prefix, api_url (default: test endpoint), collector_name, publish_as_findable (bool), detail_url_template, api_user (type: user)
-     - `base_config` section `datacite_mapping`: field_mapping table with columns datacite_field, fylr_field_path, default_value
+Do not duplicate those files here. If context is missing, prefer extending `documentation.md`.
 
-   - **`server/webhook/register-doi.js`** (new file, ~260 lines, Node.js, no npm deps):
-     - Reads info.json from `process.argv[2]`, stdin JSON payload
-     - Merges config following set_comment.js pattern
-     - Extracts config from `info.config.plugin.fylr_plugin_datacite.config`
-     - Validates required config (repository_id, password, doi_prefix)
-     - For each object: resolves field mappings via `resolveFieldPath()`, builds DataCite JSON:API payload, POSTs to DataCite, handles 422 with PUT retry, POSTs publish entry to fylr
-     - Helper functions: `resolveFieldPath(obj, objecttype, dotPath)`, `getNestedValue(obj, path)`, `httpRequest({url, method, headers, body})`
-     - Outputs `{"objects":[]}` on stdout (side-effect-only)
-     - Uses `plugin_user_access_token` (falls back to `api_user_access_token`) as Bearer token for fylr API
+## Architecture in one paragraph
 
-   - **`l10n/datacite-loca.csv`** (new file):
-     - Columns: `key,de-DE,en-US`
-     - Keys follow pattern: `server.config.group.system.plugin_fylr_plugin_datacite.title`, `server.config.name.system.plugin_fylr_plugin_datacite_datacite`, `server.config.parameter.system.plugin_fylr_plugin_datacite_datacite.<param>.label`
-     - German and English labels for all parameters and table columns
+Single Node.js script at [server/webhook/register-doi.js](server/webhook/register-doi.js). No npm dependencies — only the Node stdlib (`http`, `https`, `Buffer`, `URL`). fylr invokes it with the webhook body on stdin and `info.json` as `process.argv[2]`. The script reads the profile from `info.request.query.repository[0]`, builds a DataCite JSON:API payload from the configured field mappings, POSTs to DataCite (PUT on 422 → idempotent update), then POSTs a publish entry back to fylr so the DOI appears in the object's publish tab.
 
-   - **`Makefile`** (new file):
-     ```makefile
-     PLUGIN_NAME = fylr_plugin_datacite
-     ZIP_NAME ?= $(PLUGIN_NAME).zip
-     BUILD_DIR = build
-     build: clean
-         mkdir -p $(BUILD_DIR)/$(PLUGIN_NAME)
-         cp manifest.master.yml $(BUILD_DIR)/$(PLUGIN_NAME)/manifest.yml
-         cp -r server l10n $(BUILD_DIR)/$(PLUGIN_NAME)
-     zip: build
-         cd $(BUILD_DIR) && zip $(ZIP_NAME) -r $(PLUGIN_NAME)
-     clean:
-         rm -rf $(BUILD_DIR)
-     ```
+## Non-obvious things that will bite you
 
-   - **`.gitignore`** (new file): `/build`
+1. **The fylr publish endpoint requires a `_basetype` wrapper.** The request body must be `[{_basetype: 'publish', publish: {system_object_id, collector, publish_uri, easydb_uri}}]` — not a flat object. Missing the wrapper produces `PublishUnknownCollector: collector ""` even though the `collector` field is set, because the parser looks for `collector` inside the `publish` sub-object. This is not documented clearly in the public API docs.
 
-   **REFERENCE FILES READ** (from existing fylr-plugin-example):
-   - `manifest.master.yml` — understood plugin structure, extension format, base_config types, plugin_user pattern
-   - `server/db_pre_save+webhook/set_comment.js` — stdin/argv pattern, config merging, `{"objects":[]}` output
-   - `server/db_pre_save+write_event/write_event.py` — API call patterns, access token usage
-   - `server/db_pre_save+write_event/util.py` — `fylr_api_headers()`, `post_to_api()` patterns
-   - `server/extension/dump_info.js` — argv[2] info.json parsing, stdin reading
-   - `server/export_transport/copy_file.js` — `httpRequest`/`sendDataToURL` pattern using built-in https/http, async IIFE
-   - `server/collection/filename_copy/objects.js` — `fetchUrl()` helper, `api_user_access_token` usage
-   - `l10n/example-loca.csv` — l10n key naming convention confirmed
+2. **Bearer auth works for all fylr API calls, including publish.** An earlier iteration of this plugin used `?access_token=<token>` as a query param; that was a workaround discovered before we knew about the `_basetype` wrapper. Stick with `Authorization: Bearer <token>` headers everywhere.
 
-4. Errors and fixes:
-   - **`make` not found**: Running `make build` failed with `make: command not found`. Fixed by running the equivalent bash commands directly to verify the build structure works.
-   - **DataCite 404 in test**: When testing with fake credentials `DEMO.FYLR`, DataCite returned 404. This is expected — the script correctly handled it, logged to stderr, and still output `{"objects":[]}` on stdout.
+3. **fylr base_config does not support nested tables.** The three-section design (`datacite_global`, `datacite_profiles`, `datacite_field_mappings`) works around this. Field mappings link to profiles via a `profile_id` text column — admins maintain the foreign-key relationship by typing the same `id` in both tables.
 
-5. Problem Solving:
-   - Chose DataCite REST API over old MDS API (the existing easydb plugin used MDS which requires XML metadata + plain text URL registration)
-   - Solved idempotency: if DOI already exists (422), retry as PUT to update rather than failing
-   - Solved authentication without npm deps: used `Buffer.from().toString('base64')` for Basic Auth, built-in `https`/`http` for requests
-   - Solved config access: info.json injected as process.argv[2] and merged into stdin data following set_comment.js pattern
-   - Answered auth explanation question: `plugin_user` directive injects token pre-authenticated by fylr; no username/password flow needed unlike old easydb plugin
+4. **Linked-object fields are shallow in the webhook payload.** When a dot-path descends into a linked object, `resolveFieldPathAsync()` must fetch the full linked object from `GET /api/v1/db/<objecttype>/_all_fields/<id>?format=long` before continuing. This is in the code already; don't remove it.
 
-6. All user messages:
-   - "I need a fylr plugin that contacts the datacite api to create DOIs for our data entries. i dont know if you can browse the web. but if you can, here youßll find some information: [3 URLs]"
-   - (Answered AskUserQuestion): Standalone plugin, Node.js, configurable field mapping table, DataCite REST API
-   - "how does the authentication to the fylr api work? how do we get the token. please explain."
+5. **Commented-out `console.error` debug lines are preserved intentionally.** Uncomment during development, re-comment before release. Do not delete them.
 
-7. Pending Tasks:
-   - None. The plugin implementation is complete and the authentication question was answered.
+6. **`exit(0)` on config errors, `exit(1)` only on unhandled exceptions.** Non-zero exit makes fylr hide the emitted JSON body, which hides error diagnostics from the admin.
 
-8. Current Work:
-   The most recent work was answering the user's question about how fylr API authentication works in the plugin context. The explanation covered:
-   - The `plugin_user` directive in manifest.master.yml injecting `plugin_user_access_token` into info.json
-   - The automatic `api_user_access_token` (for the triggering user)
-   - How our `register-doi.js` reads the token from `process.argv[2]` (info.json) and uses it as a Bearer token
-   - Contrast with the old easydb plugin which needed a full session authenticate flow
+7. **Always use `info.api_url` (internal URL) for fylr API calls**, not `info.external_url`. The internal URL avoids reverse-proxy interference — particularly important for the publish call.
 
-9. Optional Next Step:
-   No explicit next step requested. The plugin is complete. The user asked an explanatory question which was fully answered. Possible natural next steps would be testing with real DataCite test credentials or deploying to a fylr instance, but these have not been requested.
+## Build system
 
-If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: C:\Users\merdoes\.claude\projects\c--Users-merdoes-Documents-fylr-plugin-example\37751f93-223d-4080-9c42-d511f12df325.jsonl
+- `make zip` → produces `build/<plugin-name>.zip`
+- The `buildinfojson` target is copied verbatim from the [official fylr docs](https://docs.fylr.io/for-developers/plugin/release). It generates `build-info.json` (with git metadata) which fylr reads to display **Build Info** in the plugin manager.
+- `manifest.master.yml` → `manifest.yml` (renamed during build; filename must be exactly `manifest.yml`)
+- No transpilation, no bundling, no dependency install step.
+
+Release workflow: bump `version` in `manifest.master.yml`, add a `CHANGELOG.md` entry, `make zip RELEASE_TAG=vX.Y.Z`.
+
+## Testing
+
+- Test DataCite endpoint: `https://api.test.datacite.org` (the default `api_url` for new profiles). Returns real-looking responses but doesn't mint public DOIs.
+- There are no automated tests — this is a small plugin with external-side-effect-heavy logic. Verification is manual: configure a profile, fire the webhook, check DataCite + the object's publish tab.
+- For local curl testing against the running fylr docker container, the internal API is typically reachable at `http://<service>:8080` (the port matters — omitting it yields a 301).
+
+## Do not
+
+- Add npm dependencies. The no-deps constraint keeps the zip simple and compatible with whatever Node version fylr's node-exec service ships.
+- Move logic out of [register-doi.js](server/webhook/register-doi.js) into modules. It's a single-file script by design.
+- Invent manifest fields. Reference the [fylr plugin docs](https://docs.fylr.io/for-developers/plugin/) when adding anything to `manifest.master.yml` — if it's not in the docs, it probably isn't a real field.
+- Touch the `_basetype` wrapper in the publish payload without re-reading point 1 above.
+
+## External references
+
+- [fylr plugin development docs](https://docs.fylr.io/for-developers/plugin/)
+- [DataCite REST API](https://support.datacite.org/reference/introduction)
+- [DataCite metadata schema](https://schema.datacite.org/)
