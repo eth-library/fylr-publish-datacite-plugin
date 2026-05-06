@@ -36,8 +36,9 @@ Each row defines one DataCite repository. Multiple profiles can be configured an
 | Repository ID | Your DataCite repository ID |
 | Password | Your DataCite repository password |
 | DOI Prefix | DOI prefix including trailing slash, e.g. `10.12345/` |
+| DOI Unique ID Field | The part of the DOI that comes after the prefix. User `systemobjectid`, `uuid` or a dot-separated path to a field in a fylr object. |
 | API URL | DataCite API endpoint. Default: `https://api.test.datacite.org` (test). Use `https://api.datacite.org` for production. |
-| Collector Name | Internal name of the collector as configured in the fylr base config publish settings |
+| Collector Name | Internal name of the collector as configured in the fylr base config publish settings. |
 | Publish as Findable | If enabled, the DOI is immediately published (findable). Requires a Detail URL Template. |
 | Detail URL Template | URL template for the object's landing page. Use `%system_object_id%` as placeholder. |
 | DOI Resolver URL | The first part of the URL that will be written in the publish entry in fylr. The URL setting in the collector base config will be ignored. |

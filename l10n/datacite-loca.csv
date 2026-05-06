@@ -8,6 +8,7 @@ server.config.parameter.system.datacite_profiles.profiles.id.label,Profil-ID (f√
 server.config.parameter.system.datacite_profiles.profiles.repository_id.label,Repository ID,Repository ID
 server.config.parameter.system.datacite_profiles.profiles.password.label,Passwort,Password
 server.config.parameter.system.datacite_profiles.profiles.doi_prefix.label,DOI Prefix (z.B. 10.5072/fylr-),DOI Prefix (e.g. 10.5072/fylr-)
+server.config.parameter.system.datacite_profiles.profiles.doi_unique_id_field.label,DOI Unique ID Feld,DOI Unique ID Field
 server.config.parameter.system.datacite_profiles.profiles.api_url.label,DataCite API URL,DataCite API URL
 server.config.parameter.system.datacite_profiles.profiles.collector_name.label,Collector Name,Collector Name
 server.config.parameter.system.datacite_profiles.profiles.publish_as_findable.label,DOI Status,DOI Status

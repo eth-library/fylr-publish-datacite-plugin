@@ -105,6 +105,7 @@ async function main() {
     const publishAsFindable = dataciteConfig.publish_as_findable || false;
     const detailUrlTemplate = dataciteConfig.detail_url_template || '';
     const doiResolverUrl = (dataciteConfig.doi_resolver_url || 'https://doi.org').replace(/\/$/, '');
+    const doiUniqueIdField = dataciteConfig.doi_unique_id_field || 'systemobjectid';
 
     // Validate findable requires detail URL
     if (publishAsFindable && !detailUrlTemplate) {
@@ -143,6 +144,7 @@ async function main() {
     for (const obj of objects) {
         const systemObjectId = obj._system_object_id;
         const objecttype = obj._objecttype;
+        const uuid = obj._uuid;
 
         if (!systemObjectId || !objecttype) {
             errors.push({ system_object_id: systemObjectId, error: 'Missing _system_object_id or _objecttype' });
@@ -173,7 +175,35 @@ async function main() {
         }
 
         // Construct DOI
-        const doi = dataciteConfig.doi_prefix + systemObjectId;
+        let doi_suffix = '';
+        if (doiUniqueIdField === 'systemobjectid') {
+            doi_suffix = systemObjectId;
+        } else if (doiUniqueIdField === 'uuid') {
+            doi_suffix = uuid || systemObjectId;
+        } else {
+            // Strip objecttype prefix if present (e.g. "haustieranatomie.titel" -> "titel")
+            let resolvedPath = doiUniqueIdField;
+            if (resolvedPath && resolvedPath.startsWith(objecttype + '.')) {
+                resolvedPath = resolvedPath.slice(objecttype.length + 1);
+            }
+
+            // Prefer _current which contains the full field data; fall back to top-level obj
+            const sourceObj = (obj._current && obj._current[objecttype]) ? obj._current : obj;
+            const resolvedValue = await resolveFieldPathAsync(sourceObj, objecttype, resolvedPath, fylrApiUrl, accessToken, warnings);
+            if (resolvedValue) {
+                doi_suffix = resolvedValue;
+            } else {
+                errors.push({ system_object_id: systemObjectId, error: `DOI unique ID field "${doiUniqueIdField}" could not be resolved` });
+                continue;
+            }
+        }
+
+        if (!doi_suffix) {
+            errors.push({ system_object_id: systemObjectId, error: 'DOI unique ID field resolved to empty value' });
+            continue;
+        }
+
+        const doi = dataciteConfig.doi_prefix + doi_suffix;
         const doiPrefix = doi.split('/')[0];
 
         // Construct landing URL

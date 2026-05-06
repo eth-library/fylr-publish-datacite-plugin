@@ -280,7 +280,7 @@ If the admin forgets the query parameter, the script fails fast with `datacite.c
 4. It reads the selected profile and its matching field mappings from the plugin config.
 5. For each object in `data.objects`:
    - Resolve each field mapping's dot-path into the object. If a path goes into a linked object, fetch the full linked object from the fylr API using the plugin user's Bearer token.
-   - Construct the DOI as `<doi_prefix><system_object_id>`.
+   - Construct the DOI as `<doi_prefix><system_object_id/uuid/custom field>`.
    - Build the DataCite JSON:API payload.
    - POST to `<api_url>/dois`. If DataCite returns 422 (exists), retry with PUT to `<api_url>/dois/<doi>`.
    - POST a publish entry to `<fylr_api_url>/api/v1/publish` (Bearer auth) so the DOI appears in the object's publish tab.

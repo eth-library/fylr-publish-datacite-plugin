@@ -1,6 +1,6 @@
 plugin:
   name: fylr-plugin-datacite
-  version: "1.0.0"
+  version: "1.0.1"
   url: https://github.com/eth-library/fylr-publish-datacite-plugin
   l10n: l10n/datacite-loca.csv
   displayname:
@@ -52,23 +52,27 @@ base_config:
           - name: doi_prefix
             type: text
             position: 3
-          - name: api_url
+          - name: doi_unique_id_field
             type: text
             position: 4
+            default: "systemobjectid"
+          - name: api_url
+            type: text
+            position: 5
             default: "https://api.test.datacite.org"
           - name: collector_name
             type: text
-            position: 5
+            position: 6
           - name: publish_as_findable
             type: bool
-            position: 6
+            position: 7
             default: false
           - name: detail_url_template
             type: text
-            position: 7
+            position: 8
           - name: doi_resolver_url
             type: text
-            position: 8
+            position: 9
             default: "https://doi.org"
   - name: datacite_field_mappings
     parameters:
