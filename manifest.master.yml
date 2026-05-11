@@ -1,6 +1,6 @@
 plugin:
   name: fylr-plugin-datacite
-  version: "1.0.1"
+  version: "1.1.0"
   url: https://github.com/eth-library/fylr-publish-datacite-plugin
   l10n: l10n/datacite-loca.csv
   displayname:

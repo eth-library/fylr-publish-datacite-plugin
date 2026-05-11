@@ -24,6 +24,9 @@ This document explains how the `fylr-plugin-datacite` plugin is implemented. It 
 9. [The Main Script (`server/webhook/register-doi.js`)](#the-main-script-serverwebhookregister-doijs)
    - [Top-level structure](#top-level-structure)
    - [`main()`](#main)
+   - [`resolveExpressionAsync()`](#resolveexpressionasync)
+   - [`tokenizeExpression()`](#tokenizeexpression)
+   - [`formatDecimal2()`](#formatdecimal2)
    - [`resolveFieldPathAsync()`](#resolvefieldpathasync)
    - [`getNestedValue()`](#getnestedvalue)
    - [`httpRequest()`](#httprequest)
@@ -290,14 +293,17 @@ If the admin forgets the query parameter, the script fails fast with `datacite.c
 
 ### Top-level structure
 
-The file is ~480 lines with this shape:
+The file is ~560 lines with this shape:
 
 - Lines 1-13: require `http`/`https`, parse `info.json` from `argv[2]`.
 - Lines 15-41: buffer stdin, invoke `main()` when stdin ends, catch unhandled errors.
 - Lines 43-334: `main()` — the whole orchestration.
-- Lines 341-419: `resolveFieldPathAsync()` — dot-path resolution with fylr-specific fallbacks.
-- Lines 424-437: `getNestedValue()` — simple dot-path getter.
-- Lines 443-476: `httpRequest()` — Node stdlib HTTP wrapper returning a Promise.
+- `resolveExpressionAsync()` — evaluates a field-path expression (single path or concatenation); calls `resolveFieldPathAsync()` per path token.
+- `tokenizeExpression()` — parses an expression string into typed tokens.
+- `formatDecimal2()` — divides an integer by 100 and formats to two decimal places.
+- `resolveFieldPathAsync()` — dot-path resolution with fylr-specific fallbacks (linked objects, nested tables).
+- `getNestedValue()` — simple dot-path getter for reading from `info.json`.
+- `httpRequest()` — Node stdlib HTTP wrapper returning a Promise.
 
 There are commented-out `console.error` debug lines throughout. They are intentionally preserved for quick re-enablement during future debugging; do not delete them without a reason.
 
@@ -318,7 +324,7 @@ Orchestrates everything in a single async function:
 9. **Compute the DataCite Basic Auth header** ([L128](server/webhook/register-doi.js#L128)).
 10. **Loop over objects** ([L143-323](server/webhook/register-doi.js#L143-L323)):
     - Read `_system_object_id` and `_objecttype`.
-    - For each field mapping: strip an optional `<objecttype>.` prefix from the dot-path (the UI sometimes includes it, sometimes not), pick `_current[objecttype]` as the root if it exists (richer data, closer to what a full object fetch would return), and resolve the path.
+    - For each field mapping: call `resolveExpressionAsync()` with the raw `fylr_field_path` value. This handles both plain dot-paths and concatenation expressions transparently.
     - Construct the DOI as `<doi_prefix><system_object_id>`.
     - Construct the landing URL by substituting `%system_object_id%` in the template.
     - Build the DataCite payload (see [JSON:API payload format](#jsonapi-payload-format)). Note the defensive `:unkn` fallbacks — DataCite requires certain fields and rejects empty ones.
@@ -328,15 +334,44 @@ Orchestrates everything in a single async function:
 
 **Why `exit(0)` on config errors?** A non-zero exit causes fylr to treat the whole webhook invocation as failed and may hide the emitted JSON body. Emitting a structured error on stdout plus `exit(0)` gives cleaner admin-visible diagnostics.
 
+### `resolveExpressionAsync()`
+
+The entry point for all field-path resolution. It accepts either a plain dot-path (backwards compatible) or a concatenation expression and returns a string.
+
+The expression syntax:
+
+| Token | Example | Behaviour |
+|---|---|---|
+| Plain path | `haustieranatomie.titel` | resolves via `resolveFieldPathAsync` |
+| Concatenation | `field1 + field2` | results joined without separator |
+| String literal | `"Label: "` or `"\n"` | used verbatim (`\n` → newline, `\t` → tab) |
+| Conditional group | `("Label: " + field)` | entire group omitted if any field inside is empty |
+| Format specifier | `field\|decimal2` | integer ÷ 100, two decimal places (e.g. `2030` → `20.30`) |
+
+An optional `<objecttype>.` prefix on each path token is stripped before resolution, so paths with or without the prefix work identically.
+
+### `tokenizeExpression()`
+
+Parses an expression string into an array of typed tokens used by `resolveExpressionAsync`. Token types:
+
+- `{type: 'literal', value: string}` — a quoted string literal
+- `{type: 'path', value: string, format?: string}` — a dot-path reference, with an optional `format` field when `|decimal2` is appended
+- `{type: 'group', tokens: Token[]}` — a conditional group enclosed in `(...)`, recursively parsed
+
+The parser is recursive-descent, handling nested groups naturally. `+` is the only operator; whitespace around it is ignored.
+
+### `formatDecimal2()`
+
+Divides the raw string value by 100 and formats the result with `Number.toFixed(2)`. Used for field values stored as fixed-point integers (×100). Returns the original value unchanged if it is not a valid number.
+
 ### `resolveFieldPathAsync()`
 
-[register-doi.js:341-419](server/webhook/register-doi.js#L341-L419)
+Resolves a dot-separated path (e.g. `haustieranatomie.titel` or `hersteller.hersteller.name`) into a value. The logic has four subtleties that would not be obvious from the signature:
 
-Resolves a dot-separated path (e.g. `haustieranatomie.titel` or `hersteller.hersteller.name`) into a value. The logic has three subtleties that would not be obvious from the signature:
-
-1. **fylr date fields are wrapped objects** (`{value: "2025-04-05"}`). At the end of the walk, if the result is an object with a `value` key, it is unwrapped ([L417](server/webhook/register-doi.js#L417)).
+1. **fylr date fields are wrapped objects** (`{value: "2025-04-05"}`). At the end of the walk, if the result is an object with a `value` key, it is unwrapped.
 2. **The root is always `obj[objecttype]`** — fylr objects are keyed by objecttype at the top level. Passing in a bare object without that wrapper returns `undefined`.
-3. **Linked objects are shallow in the webhook payload**. When an object links to another object, the webhook payload only carries `{_id, _version}` for the linked object. If a dot-path descends into a linked object (either directly navigating into its typed key or trying to access a missing field on a wrapper), the function fetches the full linked object via `GET /api/v1/db/<objecttype>/_all_fields/<id>?format=long` using the plugin user's Bearer token, then continues the walk.
+3. **Nested table fields use a special key format.** In the fylr API payload, a nested table named `tierart` on objecttype `haustieranatomie` is stored under the key `_nested:haustieranatomie__tierart` (not `tierart`). The traversal loop tries the plain part name first; if not found, it automatically tries the `_nested:<objecttype>__<part>` variant before proceeding. The value is an array; the first element is taken and traversal continues into it.
+4. **Linked objects are shallow in the webhook payload**. When an object links to another object, the webhook payload only carries `{_id, _version}` for the linked object. If a dot-path descends into a linked object (either directly navigating into its typed key or trying to access a missing field on a wrapper), the function fetches the full linked object via `GET /api/v1/db/<objecttype>/_all_fields/<id>?format=long` using the plugin user's Bearer token, then continues the walk.
 
 Both linked-object-fetch branches record failures via the shared `warnings` array so the caller can decide how to surface them. Errors from fetches are never fatal; the path just returns `undefined` and the mapping falls back to its `default_value`.
 
@@ -445,4 +480,5 @@ Using the internal API URL (`info.api_url`) avoids any reverse-proxy interferenc
 | `PublishUnknownCollector: collector ""` | The `_basetype` wrapper got removed, or the `collector` field inside `publish` is empty, or the collector name doesn't match the one configured in fylr |
 | Publish entry returns 401/403 | The plugin user in `datacite_global.api_user` lacks the `system.api.publish.post` right |
 | Linked-object field resolves to `undefined` | Either the plugin user can't read the linked objecttype, or the path is wrong. Uncomment the linked-object `console.error` lines to see the failed fetch URL. |
+| Nested table field (e.g. `tierart`) resolves to `undefined` | The field is stored under `_nested:<objecttype>__<fieldname>` in the payload. Make sure the path continues *into* the nested rows (e.g. `objecttype.nestedField.linkedType.linkedType.textField`). |
 | Admin UI shows raw l10n keys instead of labels | New parameter was added to `manifest.master.yml` but not to `datacite-loca.csv` |

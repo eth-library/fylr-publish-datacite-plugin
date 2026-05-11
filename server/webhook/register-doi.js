@@ -162,15 +162,9 @@ async function main() {
 
             if (!dataciteField) continue;
 
-            // Strip objecttype prefix if present (e.g. "haustieranatomie.titel" -> "titel")
-            let resolvedPath = fylrPath;
-            if (resolvedPath && resolvedPath.startsWith(objecttype + '.')) {
-                resolvedPath = resolvedPath.slice(objecttype.length + 1);
-            }
-
             // Prefer _current which contains the full field data; fall back to top-level obj
             const sourceObj = (obj._current && obj._current[objecttype]) ? obj._current : obj;
-            const resolvedValue = await resolveFieldPathAsync(sourceObj, objecttype, resolvedPath, fylrApiUrl, accessToken, warnings);
+            const resolvedValue = await resolveExpressionAsync(fylrPath, sourceObj, objecttype, fylrApiUrl, accessToken, warnings);
             mappedFields[dataciteField] = resolvedValue || defaultValue || '';
         }
 
@@ -365,6 +359,120 @@ async function main() {
 }
 
 /**
+ * Parses a fylr_field_path value into typed tokens for resolveExpressionAsync.
+ *
+ * Token types:
+ *   literal  – a quoted string ("..." or '...'), with \n and \t escape support
+ *   path     – an unquoted dot-path field reference
+ *   group    – a (...) conditional block; omitted entirely when any path inside is empty
+ *
+ * Examples:
+ *   type.field + " — " + type.other + "\n"
+ *   ("Label: " + type.field + "\n") + ("Other: " + type.other + "\n")
+ */
+function formatDecimal2(value) {
+    if (!value) return '';
+    const num = parseFloat(value) / 100;
+    if (isNaN(num)) return value;
+    // return num.toFixed(2).replace('.', ',');
+    return num.toFixed(2);
+}
+
+function tokenizeExpression(expression) {
+    let i = 0;
+
+    function makePathToken(raw) {
+        const pipeIdx = raw.indexOf('|');
+        if (pipeIdx === -1) return { type: 'path', value: raw };
+        return { type: 'path', value: raw.slice(0, pipeIdx).trim(), format: raw.slice(pipeIdx + 1).trim() };
+    }
+
+    function parseString(q) {
+        i++; // skip opening quote
+        let s = '';
+        while (i < expression.length && expression[i] !== q) {
+            if (expression[i] === '\\' && i + 1 < expression.length) {
+                const n = expression[i + 1];
+                s += n === 'n' ? '\n' : n === 't' ? '\t' : n;
+                i += 2;
+            } else { s += expression[i++]; }
+        }
+        i++; // skip closing quote
+        return s;
+    }
+
+    function parseTokenList(stopChar) {
+        const result = [];
+        let current = '';
+        while (i < expression.length && expression[i] !== stopChar) {
+            const ch = expression[i];
+            if (ch === '"' || ch === "'") {
+                const t = current.trim(); if (t) result.push(makePathToken(t)); current = '';
+                result.push({ type: 'literal', value: parseString(ch) });
+            } else if (ch === '+') {
+                const t = current.trim(); if (t) result.push(makePathToken(t)); current = ''; i++;
+            } else if (ch === '(') {
+                const t = current.trim(); if (t) result.push(makePathToken(t)); current = '';
+                i++; // skip '('
+                const groupTokens = parseTokenList(')');
+                if (i < expression.length) i++; // skip ')'
+                result.push({ type: 'group', tokens: groupTokens });
+            } else { current += ch; i++; }
+        }
+        const t = current.trim(); if (t) result.push(makePathToken(t));
+        return result;
+    }
+
+    return parseTokenList(undefined);
+}
+
+/**
+ * Resolves a fylr_field_path expression to a string value.
+ *
+ * Supports:
+ *   - Single dot-path:  type.field  (existing behaviour)
+ *   - Concatenation:    type.field + " — " + type.other + "\n"
+ *   - Conditional group: ("Label: " + type.field + "\n")
+ *     → the group is omitted entirely when any field path inside resolves to empty,
+ *       so labels/separators never appear without their corresponding value.
+ */
+async function resolveExpressionAsync(expression, sourceObj, objecttype, fylrApiUrl, accessToken, warnings) {
+    if (!expression) return '';
+    const tokens = tokenizeExpression(expression);
+
+    async function resolvePath(token) {
+        let path = token.value;
+        if (path.startsWith(objecttype + '.')) path = path.slice(objecttype.length + 1);
+        const raw = (await resolveFieldPathAsync(sourceObj, objecttype, path, fylrApiUrl, accessToken, warnings)) || '';
+        if (token.format === 'decimal2') return formatDecimal2(raw);
+        return raw;
+    }
+
+    const parts = [];
+    for (const token of tokens) {
+        if (token.type === 'literal') {
+            parts.push(token.value);
+        } else if (token.type === 'path') {
+            parts.push(await resolvePath(token));
+        } else if (token.type === 'group') {
+            const subParts = [];
+            let anyEmpty = false;
+            for (const sub of token.tokens) {
+                if (sub.type === 'literal') {
+                    subParts.push(sub.value);
+                } else {
+                    const val = await resolvePath(sub);
+                    if (!val) anyEmpty = true;
+                    subParts.push(val);
+                }
+            }
+            if (!anyEmpty) parts.push(subParts.join(''));
+        }
+    }
+    return parts.join('');
+}
+
+/**
  * Like resolveFieldPath but handles fylr date objects ({value: "..."})
  * and fetches linked objects from the fylr API when the path goes deeper
  * than what the webhook payload includes.
@@ -378,6 +486,13 @@ async function resolveFieldPathAsync(obj, objecttype, dotPath, fylrApiUrl, acces
 
     for (let i = 0; i < parts.length; i++) {
         if (current === null || current === undefined) return undefined;
+
+        // Nested tables (haustieranatomie > tierart etc.) are arrays in the API payload.
+        // Take the first element so dot-path traversal can continue into it.
+        if (Array.isArray(current)) {
+            current = current[0];
+            if (current === null || current === undefined) return undefined;
+        }
 
         const part = parts[i];
 
@@ -412,6 +527,13 @@ async function resolveFieldPathAsync(obj, objecttype, dotPath, fylrApiUrl, acces
         }
 
         if (!(part in current)) {
+            // fylr stores nested table rows under _nested:<objecttype>__<fieldname>
+            const nestedKey = '_nested:' + objecttype + '__' + part;
+            if (nestedKey in current) {
+                current = current[nestedKey];
+                continue;
+            }
+
             // If current is a linked object wrapper, fetch the full object and retry
             if (current._objecttype && current._system_object_id && fylrApiUrl && accessToken) {
                 const innerId = current[current._objecttype] && current[current._objecttype]._id;

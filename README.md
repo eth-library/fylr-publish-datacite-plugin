@@ -51,8 +51,45 @@ Each row maps a DataCite metadata field to a field path in the fylr object. The 
 |---|---|
 | Profile ID | Must match the `ID` of a profile in the Profiles table |
 | DataCite Field | Target field name. Supported: `title`, `creator`, `publisher`, `date`, `description`, `contributor`, `subjects`, `resourceTypeGeneral`, `publicationYear` |
-| fylr Field Path | Dot-separated path to the field in the fylr object, e.g. `haustieranatomie.titel` |
-| Default Value | Fallback value if the field path resolves to nothing |
+| fylr Field Path | A field path or expression (see below) |
+| Default Value | Fallback value if the expression resolves to an empty string |
+
+#### fylr Field Path expressions
+
+The **fylr Field Path** column accepts either a plain dot-path or a concatenation expression built from field references, string literals, and optional conditional groups.
+
+**Plain path** (single field, existing behaviour):
+
+```
+haustieranatomie.titel
+```
+
+**Concatenation** — join multiple values with `+`:
+
+```
+haustieranatomie.field1 + haustieranatomie.field2
+```
+
+**String literals** — use `"..."` or `'...'` for static text. `\n` inserts a newline, `\t` a tab:
+
+```
+haustieranatomie.titel + "\n" + haustieranatomie.beschreibung
+"Title: " + haustieranatomie.titel
+```
+
+**Conditional groups** — wrap part of an expression in `(...)`. The group is omitted entirely if any field inside it is empty. Use this to avoid orphan labels when optional fields are missing:
+
+```
+haustieranatomie.titel + ("\nHeight: " + haustieranatomie.hoehe) + ("\nWidth: " + haustieranatomie.breite)
+```
+
+If `hoehe` is empty the whole `("\nHeight: " + haustieranatomie.hoehe)` group is dropped — no stray label appears.
+
+**Decimal format specifier** — append `|decimal2` to a field reference to divide the stored integer by 100 and format it with two decimal places. Useful for fields stored as fixed-point integers (e.g. a value of `2030` is displayed as `20.30`):
+
+```
+"Height: " + haustieranatomie.hoehe|decimal2 + " cm"
+```
 
 ## Webhook URL
 

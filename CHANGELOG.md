@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-05-11
+
+### Added
+- Expression syntax for `fylr Field Path`: combine multiple fields and static strings using `+` (e.g. `"Label: " + objecttype.field1 + "\n" + objecttype.field2`)
+- String literals with escape sequences (`\n` newline, `\t` tab) in field path expressions
+- Conditional groups `(...)`: if any field inside a group is empty, the entire group — including its static labels — is omitted from the output
+- `|decimal2` format specifier for fixed-point integer fields stored as ×100 (e.g. `2030` → `20.30`)
+- Support for nested table fields in dot-path resolution: paths now traverse through fylr's `_nested:<objecttype>__<fieldname>` array keys automatically
+
 ## [1.0.1] - 2026-05-06
 
 ### Added
